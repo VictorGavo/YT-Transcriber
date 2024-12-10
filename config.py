@@ -11,32 +11,40 @@ PLAYLIST_ID = os.getenv('PLAYLIST_ID')
 # OpenAI Configuration
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
+# Google Drive Configuration
+GOOGLE_DRIVE_CREDS_FILE = os.getenv('GOOGLE_DRIVE_CREDS_FILE')
+GDRIVE_UNREAD_FOLDER_ID = os.getenv('GDRIVE_UNREAD_FOLDER_ID')  # Folder for new transcripts
+GDRIVE_PROCESSED_FOLDER_ID = os.getenv('GDRIVE_PROCESSED_FOLDER_ID')  # Folder for processed docs
+OBSIDIAN_VAULT_PATH = os.getenv('OBSIDIAN_VAULT_PATH')  # Path to Obsidian vault
+
 # File Paths
 TRANSCRIPTS_DIR = 'transcripts'
-OBSIDIAN_VAULT_DIR = os.getenv('OBSIDIAN_VAULT_DIR', 'obsidian_vault')
-GOOGLE_DRIVE_DIR = r"G:\My Drive\Projects\Deep Learn\Unread"
 PROCESSED_VIDEOS_FILE = 'processed_videos.json'
 
-# Markdown Template
-MARKDOWN_TEMPLATE = """---
-Status: 
+# Markdown Templates
+GDRIVE_DOC_TEMPLATE = """
+{transcript}
+"""
+
+OBSIDIAN_NOTE_TEMPLATE = """---
+Status: Processed
 tags: input/videos
 Links: 
-Created: {date}
+Created: {created_date}
 Source: {url}
 Author: {channel}
 Collection: YouTube
-Finished: {date}
+Processed: {processed_date}
 Rating:
 ---
+
+## Highlights and Comments
+{highlights}
+
 ## Summary
 {summary}
 
 ## Notes
 ### Transcript
-
 {transcript}
-
-## Highlights
-{action_items}
 """

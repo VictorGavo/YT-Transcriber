@@ -5,31 +5,19 @@ from datetime import datetime
 import tiktoken
 from config import (
     OPENAI_API_KEY,
-    TRANSCRIPTS_DIR,
-    OBSIDIAN_VAULT_DIR,
-    MARKDOWN_TEMPLATE,
-    GOOGLE_DRIVE_DIR
+    TRANSCRIPTS_DIR
 )
+from gdrive_handler import GoogleDriveHandler
 
 class VideoTranscriber:
     def __init__(self):
         self.model = whisper.load_model("base")
         self.client = OpenAI(api_key=OPENAI_API_KEY)
         self.encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+        self.gdrive = GoogleDriveHandler()
         
         # Create necessary directories if they don't exist
         os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
-        os.makedirs(GOOGLE_DRIVE_DIR, exist_ok=True)
-        
-        # Define category folders
-        self.categories = {
-            'time': 'Time Management',
-            'relationship': 'Relationships and Network',
-            'network': 'Relationships and Network',
-            'mindset': 'Mindset and Philosophy',
-            'philosophy': 'Mindset and Philosophy',
-            'unsorted': 'Unsorted'
-        }
 
     def count_tokens(self, text):
         """Count the number of tokens in a text."""
@@ -81,27 +69,6 @@ class VideoTranscriber:
         )
         return response.choices[0].message.content
 
-    def determine_category(self, title, transcript):
-        """Determine the appropriate category folder based on content."""
-        print("Determining content category...")
-        
-        response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that categorizes content. Available categories: Time Management, Relationships and Network, Mindset and Philosophy. If unsure, respond with 'Unsorted'."},
-                {"role": "user", "content": f"Based on this title and transcript excerpt, which category best fits? Title: {title}\n\nTranscript excerpt: {transcript[:1000]}"}
-            ]
-        )
-        
-        category_text = response.choices[0].message.content.lower()
-        
-        # Match with available categories
-        for key, category in self.categories.items():
-            if key in category_text:
-                return category
-        
-        return 'Unsorted'
-
     def generate_summary(self, transcript):
         """Generate a summary of the transcript using OpenAI."""
         print("Generating summary...")
@@ -133,74 +100,19 @@ class VideoTranscriber:
         
         return summaries[0]
 
-    def extract_highlights(self, transcript):
-        """Extract key highlights and insights from the transcript using OpenAI."""
-        print("Extracting highlights...")
-        
-        chunks = self.chunk_text(transcript)
-        all_highlights = []
-        
-        for i, chunk in enumerate(chunks, 1):
-            print(f"Processing chunk {i}/{len(chunks)}...")
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant that extracts key insights and memorable quotes from video transcripts. Format them as bullet points."},
-                    {"role": "user", "content": f"Please extract the most important insights, key points, and memorable quotes from the following transcript section. Format them as bullet points:\n\n{chunk}"}
-                ]
-            )
-            all_highlights.append(response.choices[0].message.content)
-        
-        if len(all_highlights) > 1:
-            combined_highlights = "\n\n".join(all_highlights)
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant that consolidates and refines key points and insights."},
-                    {"role": "user", "content": f"Please consolidate and refine these highlights into a clear, non-redundant list of the most important points:\n\n{combined_highlights}"}
-                ]
-            )
-            return response.choices[0].message.content
-        
-        return all_highlights[0]
-
-    def create_obsidian_note(self, video_info, transcript):
-        """Create a formatted transcript file in Google Drive."""
-        print(f"Creating transcript for: {video_info['title']}")
+    def create_transcript_doc(self, video_info, transcript):
+        """Create a Google Doc transcript file."""
+        print(f"Creating transcript doc for: {video_info['title']}")
         
         # Format transcript with paragraphs
         formatted_transcript = self.format_transcript_with_paragraphs(transcript)
         
-        # Generate summary and highlights
-        summary = self.generate_summary(transcript)
-        highlights = self.extract_highlights(transcript)
-
-        # Get current datetime
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        # Determine category and create full path
-        category = self.determine_category(video_info['title'], transcript)
-        category_dir = os.path.join(GOOGLE_DRIVE_DIR, category)
-        os.makedirs(category_dir, exist_ok=True)
-
-        # Create content using the template from config
-        content = MARKDOWN_TEMPLATE.format(
-            date=current_time,
-            url=video_info['url'],
-            channel=video_info['channel'],
-            summary=summary,
-            transcript=formatted_transcript,
-            action_items=highlights
+        # Create Google Doc
+        doc_id = self.gdrive.create_doc(
+            video_info['title'],
+            formatted_transcript,
+            video_info
         )
-
-        # Create filename from video title (sanitized)
-        filename = "".join(x for x in video_info['title'] if x.isalnum() or x in (' ', '-', '_'))
-        filename = f"{filename}.txt"
-        filepath = os.path.join(category_dir, filename)
-
-        # Save the file
-        print(f"Saving transcript to: {filepath}")
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(content)
-
-        return filepath
+        
+        print(f"Created Google Doc with ID: {doc_id}")
+        return doc_id
