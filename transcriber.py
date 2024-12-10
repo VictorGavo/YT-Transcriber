@@ -75,8 +75,8 @@ class VideoTranscriber:
         response = self.client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that formats text into clear, readable paragraphs. Keep the original content intact but add appropriate paragraph breaks for better readability."},
-                {"role": "user", "content": f"Please format this transcript into clear paragraphs, maintaining all original content:\n\n{transcript}"}
+                {"role": "system", "content": "You are a helpful assistant that formats text into clear, readable paragraphs. Format the text with proper paragraph breaks by adding two newlines (\\n\\n) between paragraphs. Each paragraph should be a cohesive group of related sentences. Keep the original content intact but make it more readable with appropriate paragraph structure."},
+                {"role": "user", "content": f"Please format this transcript into clear paragraphs with proper spacing (double newlines between paragraphs):\n\n{transcript}"}
             ]
         )
         return response.choices[0].message.content
@@ -183,22 +183,15 @@ class VideoTranscriber:
         category_dir = os.path.join(GOOGLE_DRIVE_DIR, category)
         os.makedirs(category_dir, exist_ok=True)
 
-        # Create content with metadata and formatted sections
-        content = f"""Title: {video_info['title']}
-Date: {current_time}
-Channel: {video_info['channel']}
-URL: {video_info['url']}
-Category: {category}
-
-SUMMARY
-{summary}
-
-TRANSCRIPT
-{formatted_transcript}
-
-KEY HIGHLIGHTS
-{highlights}
-"""
+        # Create content using the template from config
+        content = MARKDOWN_TEMPLATE.format(
+            date=current_time,
+            url=video_info['url'],
+            channel=video_info['channel'],
+            summary=summary,
+            transcript=formatted_transcript,
+            action_items=highlights
+        )
 
         # Create filename from video title (sanitized)
         filename = "".join(x for x in video_info['title'] if x.isalnum() or x in (' ', '-', '_'))

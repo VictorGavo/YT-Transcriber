@@ -34,6 +34,7 @@ Rating:
 
 ## Notes
 ### Transcript
+
 {transcript}
 
 ## Highlights
