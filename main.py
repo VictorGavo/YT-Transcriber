@@ -1,19 +1,39 @@
 import os
+import sys
 import time
+import signal
 import logging
+from logging.handlers import RotatingFileHandler
 from youtube_monitor import YouTubeMonitor
 from transcriber import VideoTranscriber
 from gdrive_handler import GoogleDriveHandler
 
-# Configure logging
+# Configure logging with rotation
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('youtube_monitor.log'),
+        RotatingFileHandler(
+            'youtube_monitor.log',
+            maxBytes=10485760,  # 10MB
+            backupCount=5
+        ),
         logging.StreamHandler()
     ]
 )
+
+# Global flag for graceful shutdown
+should_exit = False
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully."""
+    global should_exit
+    logging.info("Received shutdown signal, cleaning up...")
+    should_exit = True
+
+# Register signal handlers
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 
 def process_video(video_info, youtube_monitor, transcriber):
     """Process a single video."""
@@ -42,6 +62,20 @@ def process_video(video_info, youtube_monitor, transcriber):
         
     return True
 
+def check_system_resources():
+    """Check system resources and log warnings if necessary."""
+    try:
+        # Check disk space
+        disk = os.statvfs('.')
+        free_space_gb = (disk.f_bavail * disk.f_frsize) / (1024**3)
+        if free_space_gb < 1.0:  # Less than 1GB free
+            logging.warning(f"Low disk space: {free_space_gb:.2f}GB remaining")
+        
+        # Add more resource checks as needed
+        
+    except Exception as e:
+        logging.error(f"Error checking system resources: {str(e)}")
+
 def main():
     youtube_monitor = YouTubeMonitor()
     transcriber = VideoTranscriber()
@@ -49,24 +83,43 @@ def main():
     
     logging.info("Starting YouTube transcription bot...")
     
-    while True:
+    retry_delay = 60
+    max_delay = 3600  # 1 hour
+    
+    while not should_exit:
         try:
+            # Check system resources
+            check_system_resources()
+            
             # Check for new videos
             new_videos = youtube_monitor.get_new_videos()
             
             for video in new_videos:
+                if should_exit:
+                    break
+                    
                 logging.info(f"Processing new video: {video['title']}")
                 process_video(video, youtube_monitor, transcriber)
             
             # Check Google Drive for processed files
             gdrive.monitor_drive()
             
+            # Reset retry delay on successful iteration
+            retry_delay = 60
+            
             # Wait before next check
-            time.sleep(300)  # 5 minutes
+            for _ in range(30):  # Break up 5-minute sleep into 10-second intervals
+                if should_exit:
+                    break
+                time.sleep(10)
             
         except Exception as e:
             logging.error(f"Error in main loop: {str(e)}")
-            time.sleep(60)  # Wait 1 minute on error
+            time.sleep(min(retry_delay, max_delay))
+            retry_delay *= 2  # Exponential backoff
+    
+    logging.info("Shutting down YouTube transcription bot...")
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
