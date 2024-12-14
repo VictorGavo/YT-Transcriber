@@ -44,34 +44,67 @@ This bot monitors a YouTube playlist for new videos, transcribes them, and creat
 
 Edit the `.env` file with your settings:
 
-### YouTube API Setup
+### Required Configuration
+
+#### YouTube API Setup
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select an existing one
 3. Enable the YouTube Data API v3
 4. Create credentials (API key)
 5. Copy the API key to `YOUTUBE_API_KEY` in your `.env` file
 
-### YouTube Playlist ID
+#### YouTube Playlist ID
 1. Create or open a YouTube playlist you want to monitor
 2. From the playlist URL (e.g., https://www.youtube.com/playlist?list=PLxxxxxxxxxxxxxxx)
 3. Copy the ID after "list=" (PLxxxxxxxxxxxxxxx)
 4. Set this as `PLAYLIST_ID` in your `.env` file
    - Note: The playlist must be either public or unlisted to be accessible
 
-### OpenAI API Setup
+#### OpenAI API Setup
 1. Go to [OpenAI API Keys](https://platform.openai.com/api-keys)
 2. Create a new API key
 3. Copy it to `OPENAI_API_KEY` in your `.env` file
 
-### Obsidian Configuration
+#### Obsidian Configuration
 Set `OBSIDIAN_VAULT_DIR` to the full path of your Obsidian vault directory
+
+### Optional Google Drive Integration
+
+The bot supports optional Google Drive integration for storing and processing transcripts. If you want to use this feature:
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable the Google Drive API
+3. Create OAuth 2.0 credentials:
+   - Click "Create Credentials" > "OAuth client ID"
+   - Choose "Desktop app" as application type
+   - Download the credentials JSON file
+   - Set `GOOGLE_DRIVE_CREDS_FILE` in your `.env` to point to this file
+
+4. Create two folders in your Google Drive:
+   - One for unread transcripts
+   - One for processed transcripts
+
+5. Get the folder IDs:
+   - Open each folder in Google Drive
+   - The folder ID is in the URL: drive.google.com/drive/folders/FOLDER_ID
+   - Set these IDs in your `.env`:
+     ```
+     GDRIVE_UNREAD_FOLDER_ID=your_unread_folder_id
+     GDRIVE_PROCESSED_FOLDER_ID=your_processed_folder_id
+     ```
 
 Example `.env` file:
 ```
+# Required Configuration
 YOUTUBE_API_KEY=your_youtube_api_key_here
 PLAYLIST_ID=PLxxxxxxxxxxxxxxx
 OPENAI_API_KEY=your_openai_api_key_here
 OBSIDIAN_VAULT_DIR=C:/Users/YourUsername/Documents/ObsidianVault
+
+# Optional Google Drive Configuration
+GOOGLE_DRIVE_CREDS_FILE=path_to_your_credentials.json
+GDRIVE_UNREAD_FOLDER_ID=your_unread_folder_id_here
+GDRIVE_PROCESSED_FOLDER_ID=your_processed_folder_id_here
 ```
 
 ## Usage
@@ -146,6 +179,7 @@ Rating:
 - `main.py`: Main script orchestrating the process
 - `youtube_monitor.py`: YouTube playlist monitoring and video handling
 - `transcriber.py`: Audio transcription and note generation
+- `gdrive_handler.py`: Optional Google Drive integration
 - `config.py`: Configuration settings
 - `requirements.txt`: Python dependencies
 - `.env`: Environment variables (create from template)
@@ -171,6 +205,7 @@ The bot includes comprehensive error handling and logging for:
 - Transcription quality depends on video audio quality
 - The YouTube playlist must be public or unlisted
 - Make sure to use the correct playlist ID format (PLxxxxxxxxxxxxxxx)
+- Google Drive integration is optional - transcripts will be saved locally if not configured
 
 ## Planned Improvements
 

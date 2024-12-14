@@ -3,10 +3,12 @@ import sys
 import time
 import signal
 import logging
+import shutil
 from logging.handlers import RotatingFileHandler
 from youtube_monitor import YouTubeMonitor
 from transcriber import VideoTranscriber
 from gdrive_handler import GoogleDriveHandler
+from config import GOOGLE_DRIVE_CREDS_FILE
 
 # Configure logging with rotation
 logging.basicConfig(
@@ -44,7 +46,7 @@ def process_video(video_info, youtube_monitor, transcriber):
         # Transcribe audio
         transcript = transcriber.transcribe_audio(audio_path)
         
-        # Create Google Doc
+        # Create transcript document
         doc_id = transcriber.create_transcript_doc(video_info, transcript)
         
         # Mark video as processed
@@ -65,9 +67,9 @@ def process_video(video_info, youtube_monitor, transcriber):
 def check_system_resources():
     """Check system resources and log warnings if necessary."""
     try:
-        # Check disk space
-        disk = os.statvfs('.')
-        free_space_gb = (disk.f_bavail * disk.f_frsize) / (1024**3)
+        # Cross-platform disk space check
+        total, used, free = shutil.disk_usage('.')
+        free_space_gb = free / (1024**3)
         if free_space_gb < 1.0:  # Less than 1GB free
             logging.warning(f"Low disk space: {free_space_gb:.2f}GB remaining")
         
@@ -79,7 +81,14 @@ def check_system_resources():
 def main():
     youtube_monitor = YouTubeMonitor()
     transcriber = VideoTranscriber()
-    gdrive = GoogleDriveHandler()
+    
+    # Only initialize Google Drive if credentials are configured
+    gdrive = None
+    if GOOGLE_DRIVE_CREDS_FILE:
+        gdrive = GoogleDriveHandler()
+        logging.info("Google Drive integration enabled")
+    else:
+        logging.info("Google Drive integration disabled - transcripts will be saved locally")
     
     logging.info("Starting YouTube transcription bot...")
     
@@ -101,8 +110,9 @@ def main():
                 logging.info(f"Processing new video: {video['title']}")
                 process_video(video, youtube_monitor, transcriber)
             
-            # Check Google Drive for processed files
-            gdrive.monitor_drive()
+            # Check Google Drive for processed files if enabled
+            if gdrive:
+                gdrive.monitor_drive()
             
             # Reset retry delay on successful iteration
             retry_delay = 60
