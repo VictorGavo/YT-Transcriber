@@ -68,6 +68,23 @@ Edit the `.env` file with your settings:
 #### Obsidian Configuration
 Set `OBSIDIAN_VAULT_DIR` to the full path of your Obsidian vault directory
 
+### Optional YouTube Authentication
+
+If you encounter "Sign in to confirm you're not a bot" errors, you have two options:
+
+1. Using Browser Cookies (Recommended):
+   - The script will automatically try to use cookies from your Chrome browser
+   - Make sure you're logged into YouTube in Chrome
+   - The script will use these cookies for authentication
+
+2. Using YouTube Credentials:
+   - Add your YouTube credentials to `.env`:
+     ```
+     YOUTUBE_USERNAME=your_youtube_email
+     YOUTUBE_PASSWORD=your_youtube_password
+     ```
+   - Note: Using credentials directly is less secure than using browser cookies
+
 ### Optional Google Drive Integration
 
 The bot supports optional Google Drive integration for storing and processing transcripts. If you want to use this feature:
@@ -101,6 +118,10 @@ PLAYLIST_ID=PLxxxxxxxxxxxxxxx
 OPENAI_API_KEY=your_openai_api_key_here
 OBSIDIAN_VAULT_DIR=C:/Users/YourUsername/Documents/ObsidianVault
 
+# Optional YouTube Authentication
+YOUTUBE_USERNAME=your_youtube_email
+YOUTUBE_PASSWORD=your_youtube_password
+
 # Optional Google Drive Configuration
 GOOGLE_DRIVE_CREDS_FILE=path_to_your_credentials.json
 GDRIVE_UNREAD_FOLDER_ID=your_unread_folder_id_here
@@ -120,6 +141,16 @@ The bot will:
 3. Generate summaries and highlights
 4. Create formatted notes in your Obsidian vault
 5. Log all activities to `youtube_monitor.log`
+
+### Handling YouTube Bot Detection
+
+If you encounter "Sign in to confirm you're not a bot" errors:
+1. First try running the script without authentication - it will use your Chrome browser cookies
+2. If that doesn't work, add your YouTube credentials to `.env`
+3. If you still have issues, try:
+   - Reducing the frequency of video downloads
+   - Using a VPN
+   - Ensuring you're not running multiple instances of the script
 
 ## Scheduling
 
@@ -195,6 +226,7 @@ The bot logs all activities to:
 The bot includes comprehensive error handling and logging for:
 - API failures
 - Download issues
+- Bot detection and authentication errors
 - Transcription problems
 - File system errors
 
@@ -206,6 +238,31 @@ The bot includes comprehensive error handling and logging for:
 - The YouTube playlist must be public or unlisted
 - Make sure to use the correct playlist ID format (PLxxxxxxxxxxxxxxx)
 - Google Drive integration is optional - transcripts will be saved locally if not configured
+- YouTube authentication is optional but may be required if encountering bot detection
+
+### YouTube Download Limitations
+
+YouTube has various protections against automated downloads. If you encounter download errors:
+
+1. Rate Limiting:
+   - The bot includes automatic retry logic with progressive backoff
+   - Consider reducing the frequency of video processing
+   - You may need to wait a few minutes between attempts
+
+2. Bot Detection:
+   - If you see "Sign in to confirm you're not a bot" errors:
+     * Try accessing the video manually in your browser first
+     * Wait a few minutes before running the bot again
+     * Consider using a VPN if issues persist
+   - The bot will automatically retry failed downloads
+
+3. Age-Restricted Videos:
+   - Videos that require age verification may fail to download
+   - Consider removing such videos from your playlist
+
+4. Regional Restrictions:
+   - Some videos may be blocked in certain countries
+   - Consider using a VPN to access region-locked content
 
 ## Planned Improvements
 

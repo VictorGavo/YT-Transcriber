@@ -3,7 +3,6 @@ import sys
 import time
 import signal
 import logging
-import shutil
 from logging.handlers import RotatingFileHandler
 from youtube_monitor import YouTubeMonitor
 from transcriber import VideoTranscriber
@@ -20,7 +19,7 @@ logging.basicConfig(
             maxBytes=10485760,  # 10MB
             backupCount=5
         ),
-        logging.StreamHandler()
+        logging.StreamHandler(sys.stdout)  # Ensure output goes to stdout
     ]
 )
 
@@ -40,14 +39,40 @@ signal.signal(signal.SIGINT, signal_handler)
 def process_video(video_info, youtube_monitor, transcriber):
     """Process a single video."""
     try:
+        logging.info(f"Starting to process video: {video_info['title']}")
+        
         # Download audio
-        audio_path = youtube_monitor.get_video_audio_url(video_info['url'])
+        logging.info("Downloading audio...")
+        try:
+            audio_path = youtube_monitor.get_video_audio_url(video_info['url'])
+            if not os.path.exists(audio_path):
+                raise Exception(f"Audio file not found at {audio_path}")
+            logging.info(f"Successfully downloaded audio to: {audio_path}")
+        except Exception as e:
+            logging.error(f"Failed to download audio: {str(e)}")
+            return False
         
         # Transcribe audio
-        transcript = transcriber.transcribe_audio(audio_path)
+        logging.info("Transcribing audio...")
+        try:
+            transcript = transcriber.transcribe_audio(audio_path)
+            logging.info("Successfully transcribed audio")
+        except Exception as e:
+            logging.error(f"Failed to transcribe audio: {str(e)}")
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+            return False
         
         # Create transcript document
-        doc_id = transcriber.create_transcript_doc(video_info, transcript)
+        logging.info("Creating transcript document...")
+        try:
+            doc_id = transcriber.create_transcript_doc(video_info, transcript)
+            logging.info(f"Successfully created transcript document: {doc_id}")
+        except Exception as e:
+            logging.error(f"Failed to create transcript document: {str(e)}")
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+            return False
         
         # Mark video as processed
         youtube_monitor.mark_video_processed(video_info['id'])
@@ -55,30 +80,33 @@ def process_video(video_info, youtube_monitor, transcriber):
         # Clean up audio file
         if os.path.exists(audio_path):
             os.remove(audio_path)
+            logging.info("Cleaned up audio file")
             
         logging.info(f"Successfully processed video: {video_info['title']}")
+        return True
         
     except Exception as e:
         logging.error(f"Error processing video {video_info['title']}: {str(e)}")
         return False
-        
-    return True
 
 def check_system_resources():
     """Check system resources and log warnings if necessary."""
     try:
-        # Cross-platform disk space check
+        # Check disk space using shutil
+        import shutil
         total, used, free = shutil.disk_usage('.')
         free_space_gb = free / (1024**3)
         if free_space_gb < 1.0:  # Less than 1GB free
             logging.warning(f"Low disk space: {free_space_gb:.2f}GB remaining")
-        
-        # Add more resource checks as needed
+        else:
+            logging.info(f"Available disk space: {free_space_gb:.2f}GB")
         
     except Exception as e:
         logging.error(f"Error checking system resources: {str(e)}")
 
 def main():
+    logging.info("Starting YouTube transcription bot...")
+    
     youtube_monitor = YouTubeMonitor()
     transcriber = VideoTranscriber()
     
@@ -90,8 +118,6 @@ def main():
     else:
         logging.info("Google Drive integration disabled - transcripts will be saved locally")
     
-    logging.info("Starting YouTube transcription bot...")
-    
     retry_delay = 60
     max_delay = 3600  # 1 hour
     
@@ -101,23 +127,33 @@ def main():
             check_system_resources()
             
             # Check for new videos
+            logging.info("Checking for new videos...")
             new_videos = youtube_monitor.get_new_videos()
+            
+            if not new_videos:
+                logging.info("No new videos found")
+            else:
+                logging.info(f"Found {len(new_videos)} new videos")
             
             for video in new_videos:
                 if should_exit:
                     break
                     
-                logging.info(f"Processing new video: {video['title']}")
-                process_video(video, youtube_monitor, transcriber)
+                logging.info(f"Processing video: {video['title']}")
+                success = process_video(video, youtube_monitor, transcriber)
+                if not success:
+                    logging.warning(f"Failed to process video: {video['title']}, will retry on next run")
             
             # Check Google Drive for processed files if enabled
             if gdrive:
+                logging.info("Checking Google Drive for processed files...")
                 gdrive.monitor_drive()
             
             # Reset retry delay on successful iteration
             retry_delay = 60
             
             # Wait before next check
+            logging.info("Waiting 5 minutes before next check...")
             for _ in range(30):  # Break up 5-minute sleep into 10-second intervals
                 if should_exit:
                     break

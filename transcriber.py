@@ -57,14 +57,26 @@ class VideoTranscriber:
 
     def transcribe_audio(self, audio_path):
         """Transcribe audio file using Whisper."""
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+            
+        if not os.path.getsize(audio_path) > 0:
+            raise ValueError(f"Audio file is empty: {audio_path}")
+            
         logging.info(f"Starting transcription of: {audio_path}")
-        result = self.model.transcribe(audio_path)
-        logging.info(f"Completed transcription of: {audio_path}")
-        return result["text"]
+        try:
+            result = self.model.transcribe(audio_path)
+            if not result or not result.get("text"):
+                raise ValueError("Transcription produced no text")
+            logging.info("Transcription completed successfully")
+            return result["text"]
+        except Exception as e:
+            logging.error(f"Error during transcription: {str(e)}")
+            raise
 
     def format_transcript_with_paragraphs(self, transcript):
         """Format transcript into paragraphs using OpenAI."""
-        logging.info("Starting transcript formatting...")
+        logging.info("Formatting transcript into paragraphs...")
         
         try:
             # Split transcript into smaller chunks
@@ -96,7 +108,7 @@ class VideoTranscriber:
 
     def generate_summary(self, transcript):
         """Generate a summary of the transcript using OpenAI."""
-        logging.info("Starting summary generation...")
+        logging.info("Generating summary...")
         
         try:
             chunks = self.chunk_text(transcript, max_tokens=4000)  # Reduced chunk size
@@ -145,13 +157,6 @@ class VideoTranscriber:
         logging.info(f"Creating transcript document for: {video_info['title']}")
         
         try:
-            # Save raw transcript first as backup
-            safe_title = "".join(c for c in video_info['title'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            raw_file_path = os.path.join(TRANSCRIPTS_DIR, f"{safe_title}_raw.txt")
-            with open(raw_file_path, 'w', encoding='utf-8') as f:
-                f.write(transcript)
-            logging.info(f"Saved raw transcript to: {raw_file_path}")
-            
             # Format transcript with paragraphs
             formatted_transcript = self.format_transcript_with_paragraphs(transcript)
             
@@ -179,12 +184,19 @@ class VideoTranscriber:
                 return doc_id
             else:
                 # Save locally if Google Drive is not configured
+                safe_title = "".join(c for c in video_info['title'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
                 file_path = os.path.join(TRANSCRIPTS_DIR, f"{safe_title}.md")
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(doc_content)
-                logging.info(f"Saved formatted transcript to: {file_path}")
+                logging.info(f"Saved transcript to: {file_path}")
                 return file_path
                 
         except Exception as e:
             logging.error(f"Error creating transcript document: {str(e)}")
-            return raw_file_path  # Return path to raw transcript as fallback
+            # Save raw transcript as fallback
+            safe_title = "".join(c for c in video_info['title'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            file_path = os.path.join(TRANSCRIPTS_DIR, f"{safe_title}_raw.txt")
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(transcript)
+            logging.info(f"Saved raw transcript to: {file_path}")
+            return file_path

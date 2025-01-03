@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime
+import time
 from googleapiclient.discovery import build
 import yt_dlp
 from config import (
@@ -15,7 +16,7 @@ class YouTubeMonitor:
         self.youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
         self.processed_videos = self._load_processed_videos()
         
-        # Configure yt-dlp options
+        # Configure yt-dlp options with minimal settings
         self.ydl_opts = {
             'format': 'bestaudio/best',
             'postprocessors': [{
@@ -23,10 +24,19 @@ class YouTubeMonitor:
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }],
+            'outtmpl': os.path.join(TRANSCRIPTS_DIR, '%(id)s.%(ext)s'),
             'quiet': True,
             'no_warnings': True,
             'extract_audio': True,
-            'outtmpl': os.path.join(TRANSCRIPTS_DIR, '%(id)s.%(ext)s')
+            'no_check_certificate': True,
+            'ignoreerrors': True,
+            'no_color': True,
+            'noprogress': True,
+            'noplaylist': True,
+            'prefer_ffmpeg': True,
+            'hls_prefer_native': True,
+            'cachedir': False,
+            'rm_cachedir': True
         }
 
     def _load_processed_videos(self):
@@ -68,22 +78,47 @@ class YouTubeMonitor:
 
         return videos
 
-    def get_video_audio_url(self, video_url):
+    def get_video_audio_url(self, video_url, max_retries=3):
         """Download video audio and return the path to the audio file."""
-        try:
-            # Ensure transcripts directory exists
-            os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
-            
-            with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
-                # Extract video info to get the ID
-                info = ydl.extract_info(video_url, download=True)
-                video_id = info['id']
+        # Ensure transcripts directory exists
+        os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
+        
+        # Extract video ID from URL
+        video_id = video_url.split('v=')[1]
+        audio_path = os.path.join(TRANSCRIPTS_DIR, f'{video_id}.mp3')
+        
+        # If file already exists, return it
+        if os.path.exists(audio_path):
+            return audio_path
+        
+        retry_count = 0
+        last_error = None
+        
+        while retry_count < max_retries:
+            try:
+                # Download the audio
+                with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
+                    print(f"Downloading audio for video: {video_url}")
+                    ydl.download([video_url])
                 
-                # Return the path to the downloaded audio file
-                return os.path.join(TRANSCRIPTS_DIR, f'{video_id}.mp3')
+                # Verify the file was created
+                if os.path.exists(audio_path):
+                    print(f"Successfully downloaded audio to: {audio_path}")
+                    return audio_path
+                else:
+                    raise Exception("Download completed but file not found")
+                    
+            except Exception as e:
+                last_error = str(e)
+                retry_count += 1
                 
-        except Exception as e:
-            raise Exception(f"Error downloading video {video_url}: {str(e)}")
+                # Wait between retries with exponential backoff
+                wait_time = 5 * (2 ** (retry_count - 1))
+                print(f"Error occurred. Waiting {wait_time} seconds before retry {retry_count}/{max_retries}")
+                print(f"Error details: {last_error}")
+                time.sleep(wait_time)
+        
+        raise Exception(f"Error downloading video {video_url} after {max_retries} retries: {last_error}")
 
     def mark_video_processed(self, video_id):
         """Mark a video as processed."""
